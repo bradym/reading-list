@@ -1,0 +1,32 @@
+reddit:
+  username:
+  password:
+  client_id:
+  client_secret:
+  user_agent: reading-list
+
+pinboard:
+  apikey:
+
+github:
+  username:
+  password:
+
+ttrss:
+  url:
+  username:
+  password:
+
+
+# Tags can be set based on subreddit or domain.
+# Structure is:
+#
+# tags:
+#   tagname:
+#     subs:
+#       - subreddit1
+#       - subreddit2
+#     domains:
+#       - example.com
+#
+# subreddits should be lowercased
