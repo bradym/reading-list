@@ -1,75 +1,132 @@
-import readinglist.main
+# coding=utf-8
+
+"""
+Unit tests for readinglist
+"""
+
+import readinglist
 from urlparse import urlparse
-from mock import MagicMock
+import mock
 
+settings = {
+    'reddit': {
+        'username': 'fake',
+        'password': 'fake',
+        'client_id': 'fake',
+        'client_secret': 'fake',
+        'user_agent': 'reading-list'
+    },
 
-from pprint import pprint
+    'pinboard': {
+        'apikey': 'fake'
+    },
 
-rl = readinglist.main.ReadingList()
-rl.settings['tags'] = {
-    'boardgames': {
-        'domains': ['boardgamegeek.com'],
-        'subs': ['boardgames', 'dominion']
+    'github': {
+        'username': 'fake',
+        'password': 'fake',
+    },
+
+    'ttrss': {
+        'url': 'fake',
+        'username': 'fake',
+        'password': 'fake',
+    },
+    'tags': {
+        'boardgames': {
+            'domains': ['boardgamegeek.com'],
+            'subs': ['boardgames', 'dominion']
+        }
     }
 }
 
 
-def test_is_github_url_pass():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_is_github_url_pass(mock_get_settings):
     """
     Test a valid github url
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+
     url = urlparse('https://github.com/nose-devs/nose')
     assert (rl.is_github_url(url) is True)
 
 
-def test_is_github_url_fail():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_is_github_url_fail(mock_get_settings):
     """
     Test a non-github url
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+
     url = urlparse('http://example.com')
     assert (rl.is_github_url(url) is False)
 
 
-def test_get_tags_by_subreddit_pass():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_get_tags_by_subreddit_pass(mock_get_settings):
     """
     Test that a single tag is returned for a sub that is included
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+
     sub = 'dominion'
     expected = ['boardgames']
     actual = rl.get_tags_by_subreddit(sub)
     assert (expected == actual)
 
 
-def test_get_tags_by_subreddit_fail():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_get_tags_by_subreddit_fail(mock_get_settings):
     """
-    Check that no tags are returned for a sub that is not included
+    Test that no tags are returned for a sub that is not included
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+    rl.settings = settings
+
     sub = '7wonders'
     expected = ['boardgames']
     actual = rl.get_tags_by_subreddit(sub)
     assert (expected != actual)
 
 
-def test_get_tags_by_domain_pass():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_get_tags_by_domain_pass(mock_get_settings):
     """
     Check that a single tag is returned for a domain that is included
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+
     domain = 'boardgamegeek.com'
     expected = ['boardgames']
     actual = rl.get_tags_by_domain(domain)
     assert (expected == actual)
 
 
-def test_get_tags_by_domain_fail():
+@mock.patch('readinglist.readinglist.ReadingList.get_settings')
+def test_get_tags_by_domain_fail(mock_get_settings):
     """
     Check that a no tags are returned for a domain that is not included
     :return:
     """
+
+    mock_get_settings.return_value = settings
+    rl = readinglist.readinglist.ReadingList()
+
     domain = 'example.com'
     expected = ['boardgames']
     actual = rl.get_tags_by_domain(domain)

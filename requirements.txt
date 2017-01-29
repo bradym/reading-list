@@ -5,3 +5,4 @@ unidecode
 github3.py
 git+git://github.com/reuteras/ttrss-python@updateArticle
 tox
+mock

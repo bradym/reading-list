@@ -28,10 +28,7 @@ class ReadingList(object):
 
         logging.basicConfig(format='%(asctime)s \t %(levelname)s \t %(message)s', level=logging.DEBUG)
 
-        self.settings = yaml.safe_load(open(os.path.join(expanduser('~'), '.reading-list.yml')))
-
-        from pprint import pprint
-        pprint(self.settings)
+        self.settings = self.get_settings()
 
         self.ttrss = TTRClient(self.settings['ttrss']['url'],
                                self.settings['ttrss']['username'],
@@ -41,6 +38,14 @@ class ReadingList(object):
         self.pb = pinboard.Pinboard(self.settings['pinboard']['apikey'])
 
         self.gh = github3.login(self.settings['github']['username'], self.settings['github']['password'])
+
+    @staticmethod
+    def get_settings():
+        """
+        Read the settings file and save to python dict
+        :return:
+        """
+        return yaml.safe_load(open(os.path.join(expanduser('~'), '.reading-list.yml')))
 
     def get_tags_by_subreddit(self, subreddit):
         """

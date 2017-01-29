@@ -7,6 +7,6 @@ setup(
     license='MIT',
     entry_points='''
         [console_scripts]
-        rl=readinglist.main:main
+        rl=readinglist.readinglist:main
     ''',
 )
