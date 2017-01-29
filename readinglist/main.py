@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # coding=utf-8
 
 """
@@ -14,9 +13,14 @@ from urlparse import urlparse
 import github3
 import logging
 from ttrss.client import TTRClient
+import os
+from os.path import expanduser
 
 
-class ReadingList:
+class ReadingList(object):
+    """
+    Create bookmarks in pinboard from saved items in reddit and ttrss.
+    """
 
     settings = None
 
@@ -24,7 +28,10 @@ class ReadingList:
 
         logging.basicConfig(format='%(asctime)s \t %(levelname)s \t %(message)s', level=logging.DEBUG)
 
-        self.settings = yaml.safe_load(open('settings.yml'))
+        self.settings = yaml.safe_load(open(os.path.join(expanduser('~'), '.reading-list.yml')))
+
+        from pprint import pprint
+        pprint(self.settings)
 
         self.ttrss = TTRClient(self.settings['ttrss']['url'],
                                self.settings['ttrss']['username'],
@@ -81,7 +88,12 @@ class ReadingList:
         repo = info[2]
 
         if not self.gh.is_starred(username, repo):
-            return self.gh.star(username, repo)
+            if self.gh.star(username, repo):
+                logging.info('Repo starred successfully.')
+                return True
+        else:
+            logging.info('Repo previously starred.')
+            return True
 
     def process_saved_reddit_posts(self):
         """
@@ -118,6 +130,17 @@ class ReadingList:
                 logging.info('Link saved successfully')
                 self.ttrss.update_article(headline.id, 0, 0)
 
+    def is_github_url(self, url):
+        """
+        Check if the given url is on github
+        :param url:
+        :return:
+        """
+        if url.netloc == 'github.com':
+            return True
+        else:
+            return False
+
     def save_link(self, url, title, tags):
         """
         Create bookmark in pinboard or star repo in github
@@ -132,10 +155,9 @@ class ReadingList:
 
         parsed_url = urlparse(url)
 
-        if parsed_url.netloc == 'github.com':
+        if self.is_github_url(parsed_url):
             logging.info('URL is github repo, attempting to star repo.')
             if self.star_github_repo(parsed_url):
-                logging.info('Repo starred successfully.')
                 return True
         else:
             if len(tags) == 0:
@@ -150,8 +172,16 @@ class ReadingList:
             if self.pb.posts.add(url=url, description=unidecode(title), toread=True, tags=tags):
                 return True
 
-if __name__ == '__main__':
+
+def main():
+    """
+    CLI entry point
+    :return:
+    """
 
     rl = ReadingList()
     rl.process_saved_reddit_posts()
     rl.process_ttrss_stars()
+
+if __name__ == '__main__':
+    main()
