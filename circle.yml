@@ -1,0 +1,3 @@
+dependencies:
+  pre:
+    touch /home/ubuntu/.reading-list.yml
