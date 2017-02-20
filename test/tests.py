@@ -51,7 +51,7 @@ def test_is_github_url_pass(mock_get_settings):
     rl = readinglist.readinglist.ReadingList()
 
     url = urlparse('https://github.com/nose-devs/nose')
-    assert (rl.is_github_url(url) is True)
+    assert rl.is_github_url(url) is True
 
 
 @mock.patch('readinglist.readinglist.ReadingList.get_settings')
@@ -131,3 +131,37 @@ def test_get_tags_by_domain_fail(mock_get_settings):
     expected = ['boardgames']
     actual = rl.get_tags_by_domain(domain)
     assert (expected != actual)
+
+
+@mock.patch('github3.GitHub.is_starred')
+def test_star_github_repo_already_starred(mock_is_starred):
+    """
+    Check for correct behavior when a repo is already starred.
+    :param mock_is_starred:
+    :return:
+    """
+
+    mock_is_starred.return_value = True
+    rl = readinglist.readinglist.ReadingList()
+
+    repo = urlparse('https://github.com/bradym/reading-list')
+    expected = True
+    actual = rl.star_github_repo(repo)
+    assert expected == actual
+
+
+@mock.patch('github3.GitHub.is_starred')
+def test_star_github_repo_already_starred(mock_is_starred):
+    """
+    Check for correct behavior when a repo is already starred.
+    :param mock_is_starred:
+    :return:
+    """
+
+    mock_is_starred.return_value = False
+    rl = readinglist.readinglist.ReadingList()
+
+    repo = urlparse('https://github.com/bradym/reading-list')
+    expected = True
+    actual = rl.star_github_repo(repo)
+    assert expected == actual
