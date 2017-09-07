@@ -1,25 +1,25 @@
 # coding=utf-8
 
 """
-Import saved items from reddit and ttrss into pinboard.
+Import saved items from reddit and ttrss into wallabag.
 """
 
 import praw
 from praw.models import Submission
-import pinboard
 import yaml
 from unidecode import unidecode
-from urlparse import urlparse
+from urllib.parse import urlparse
 import github3
 import logging
 from ttrss.client import TTRClient
 import os
 from os.path import expanduser
+from wallabag_api.wallabag import Wallabag
 
 
 class ReadingList(object):
     """
-    Create bookmarks in pinboard from saved items in reddit and ttrss.
+    Create bookmarks in wallabag from saved items in reddit and ttrss.
     """
 
     settings = None
@@ -35,9 +35,25 @@ class ReadingList(object):
                                self.settings['ttrss']['password'],
                                auto_login=True)
 
-        self.pb = pinboard.Pinboard(self.settings['pinboard']['apikey'])
-
         self.gh = github3.login(self.settings['github']['username'], self.settings['github']['password'])
+
+        wb_params = {
+            'username': self.settings['wallabag']['username'],
+            'password': self.settings['wallabag']['password'],
+            'client_id': self.settings['wallabag']['client_id'],
+            'client_secret': self.settings['wallabag']['client_secret'],
+        }
+
+        wb_host = self.settings['wallabag']['host']
+
+        wb_token = Wallabag.get_token(host=wb_host, **wb_params)
+
+        self.wb = Wallabag(
+            host=wb_host,
+            client_secret=wb_params['client_secret'],
+            client_id=wb_params['client_id'],
+            token=wb_token
+        )
 
     @staticmethod
     def get_settings():
@@ -58,7 +74,8 @@ class ReadingList(object):
 
         tags = []
 
-        for tag, tag_details in self.settings['tags'].iteritems():
+        for tag in self.settings['tags']:
+            tag_details = self.settings['tags'][tag]
             if tag_details is not None and 'subs' in tag_details and sub in tag_details['subs']:
                 tags.append(tag)
 
@@ -75,7 +92,8 @@ class ReadingList(object):
 
         tags = []
 
-        for tag, tag_details in self.settings['tags'].iteritems():
+        for tag in self.settings['tags']:
+            tag_details = self.settings['tags'][tag]
             if tag_details is not None and 'domains' in tag_details and domain in tag_details['domains']:
                 tags.append(tag)
 
@@ -128,7 +146,7 @@ class ReadingList(object):
         """
 
         for headline in self.ttrss.get_headlines(feed_id=-1, limit=1000):
-            logging.info('Saving url to pinboard')
+            logging.info('Saving url to wallabag')
             tags = []
 
             if self.save_link(headline.link, headline.title, tags):
@@ -148,7 +166,7 @@ class ReadingList(object):
 
     def save_link(self, url, title, tags):
         """
-        Create bookmark in pinboard or star repo in github
+        Create bookmark in wallabag or star repo in github
 
         :param url:
         :param title:
@@ -170,11 +188,11 @@ class ReadingList(object):
                 tags = self.get_tags_by_domain(domain)
 
             if len(tags) > 0:
-                logging.info('Saving url to pinboard with tags: {}'.format(','.join(tags)))
+                logging.info('Saving url to wallabag with tags: {}'.format(','.join(tags)))
             else:
-                logging.info('Saving url to pinboard with no tags.')
+                logging.info('Saving url to wallabag with no tags.')
 
-            if self.pb.posts.add(url=url, description=unidecode(title), toread=True, tags=tags):
+            if self.wb.post_entries(url=url, title=unidecode(title), tags=tags):
                 return True
 
 
