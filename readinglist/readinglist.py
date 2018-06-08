@@ -4,16 +4,17 @@
 Import saved items from reddit and ttrss into wallabag.
 """
 
-import praw
-from praw.models import Submission
-import yaml
-from unidecode import unidecode
-from urllib.parse import urlparse
-import github3
 import logging
-from ttrss.client import TTRClient
 import os
-from os.path import expanduser
+from pprint import pprint
+from urllib.parse import urlparse
+
+import github3
+import praw
+import yaml
+from praw.models import Submission
+from ttrss.client import TTRClient
+from unidecode import unidecode
 from wallabag_api.wallabag import Wallabag
 
 
@@ -25,98 +26,61 @@ class ReadingList(object):
     settings = None
 
     def __init__(self):
-
         logging.basicConfig(format='%(asctime)s \t %(levelname)s \t %(message)s', level=logging.DEBUG)
 
-        self.settings = self.get_settings()
+        self.credentials = {}
+        self.domain_tags = {}
+        self.subreddit_tags = {}
 
-        self.ttrss = TTRClient(self.settings['ttrss']['url'],
-                               self.settings['ttrss']['username'],
-                               self.settings['ttrss']['password'],
-                               auto_login=True)
+        self.gh = None
 
-        self.gh = github3.login(self.settings['github']['username'], self.settings['github']['password'])
+        self.settings_file_path = os.path.expanduser('~/.config/readinglist/settings.yaml')
+        self.load_settings()
 
-        wb_params = {
-            'username': self.settings['wallabag']['username'],
-            'password': self.settings['wallabag']['password'],
-            'client_id': self.settings['wallabag']['client_id'],
-            'client_secret': self.settings['wallabag']['client_secret'],
-        }
-
-        wb_host = self.settings['wallabag']['host']
-
-        wb_token = Wallabag.get_token(host=wb_host, **wb_params)
-
-        self.wb = Wallabag(
-            host=wb_host,
-            client_secret=wb_params['client_secret'],
-            client_id=wb_params['client_id'],
-            token=wb_token
-        )
-
-    @staticmethod
-    def get_settings():
+    def load_settings(self):
         """
         Read the settings file and save to python dict
         :return:
         """
-        return yaml.safe_load(open(os.path.join(expanduser('~'), '.reading-list.yml')))
+        with open(self.settings_file_path) as f:
+            data = yaml.safe_load(f)
 
-    def get_tags_by_subreddit(self, subreddit):
+        tags = data['tags']
+        sub_tags = {}
+        domain_tags = {}
+
+        for current_tag in tags:
+            for sub in tags[current_tag]['subreddits']:
+                if sub not in sub_tags:
+                    sub_tags[sub] = []
+                sub_tags[sub].append(current_tag)
+
+            for domain in tags[current_tag]['domains']:
+                if domain not in domain_tags:
+                    domain_tags[domain] = []
+                domain_tags[domain].append(current_tag)
+
+        self.credentials = data['credentials']
+        self.subreddit_tags = sub_tags
+        self.domain_tags = domain_tags
+
+    def get_subreddit_tags(self, subreddit):
         """
         Given a subreddit, return the tags that should be applied.
         :param subreddit: name of the subreddit
         :return: list
         """
 
-        sub = subreddit.lower()
+        return self.subreddit_tags[subreddit.lower()]
 
-        tags = []
-
-        for tag in self.settings['tags']:
-            tag_details = self.settings['tags'][tag]
-            if tag_details is not None and 'subs' in tag_details and sub in tag_details['subs']:
-                tags.append(tag)
-
-        return tags
-
-    def get_tags_by_domain(self, domain):
+    def get_domain_tags(self, domain):
         """
         Return the tags associated with the given domain
         :param domain:  domain name
         :return: list
         """
 
-        domain = domain.lower()
-
-        tags = []
-
-        for tag in self.settings['tags']:
-            tag_details = self.settings['tags'][tag]
-            if tag_details is not None and 'domains' in tag_details and domain in tag_details['domains']:
-                tags.append(tag)
-
-        return tags
-
-    def star_github_repo(self, url):
-        """
-        Star a repository in github given the url
-        :param url:
-        :return:
-        """
-
-        info = url.path.split('/')
-        username = info[1]
-        repo = info[2]
-
-        if not self.gh.is_starred(username, repo):
-            if self.gh.star(username, repo):
-                logging.info('Repo starred successfully.')
-                return True
-        else:
-            logging.info('Repo previously starred.')
-            return True
+        return self.domain_tags[domain.lower()]
 
     def process_saved_reddit_posts(self):
         """
@@ -124,18 +88,15 @@ class ReadingList(object):
         :return:
         """
 
-        r = praw.Reddit(username=self.settings['reddit']['username'],
-                        password=self.settings['reddit']['password'],
-                        client_id=self.settings['reddit']['client_id'],
-                        client_secret=self.settings['reddit']['client_secret'],
-                        user_agent=self.settings['reddit']['user_agent'])
+        r = praw.Reddit(username=self.credentials['reddit']['username'],
+                        password=self.credentials['reddit']['password'],
+                        client_id=self.credentials['reddit']['client_id'],
+                        client_secret=self.credentials['reddit']['client_secret'],
+                        user_agent=self.credentials['reddit']['user_agent'])
 
         for saved in r.user.me().saved(limit=1000):
-
             if isinstance(saved, Submission):
-
-                tags = self.get_tags_by_subreddit(saved.subreddit.display_name)
-
+                tags = self.get_subreddit_tags(saved.subreddit.display_name)
                 if self.save_link(saved.url, saved.title, tags):
                     saved.unsave()
 
@@ -153,16 +114,51 @@ class ReadingList(object):
                 logging.info('Link saved successfully')
                 self.ttrss.update_article(headline.id, 0, 0)
 
-    def is_github_url(self, url):
+    def is_github_repo(self, url):
+        path_list = url.path.split('/')
+        depth = len(path_list)
+
+        if url.netloc != 'github.com' or depth != 3:
+            logging.info('URL is not a github repo.')
+            return False
+
+        owner = path_list[1]
+        repo_name = path_list[2]
+
+        try:
+            github3.repository(owner, repo_name)
+            return True
+        except github3.exceptions.NotFoundError:
+            return False
+
+    def github_login(self):
+        if self.gh is None:
+            self.gh = github3.login(self.credentials['github']['username'], self.credentials['github']['password'])
+            try:
+                me = self.gh.me()
+                logging.info('Logged into GitHub as {}'.format(me.login))
+            except github3.exceptions.AuthenticationFailed as e:
+                logging.error('GitHub login failed: {}'.format(e.message))
+                exit(1)
+
+    def star_github_repo(self, url):
         """
-        Check if the given url is on github
+        Star a repository in github given the url
         :param url:
         :return:
         """
-        if url.netloc == 'github.com':
-            return True
+        self.github_login()
+
+        info = url.path.split('/')
+        username = info[1]
+        repo = info[2]
+
+        if not self.gh.is_starred(username, repo):
+            if self.gh.star(username, repo):
+                logging.info('Repo starred successfully.')
         else:
-            return False
+            logging.info('Repo previously starred.')
+            return True
 
     def save_link(self, url, title, tags):
         """
@@ -178,14 +174,14 @@ class ReadingList(object):
 
         parsed_url = urlparse(url)
 
-        if self.is_github_url(parsed_url):
+        if self.is_github_repo(parsed_url):
             logging.info('URL is github repo, attempting to star repo.')
             if self.star_github_repo(parsed_url):
                 return True
         else:
             if len(tags) == 0:
                 domain = parsed_url.netloc
-                tags = self.get_tags_by_domain(domain)
+                tags = self.get_domain_tags(domain)
 
             if len(tags) > 0:
                 logging.info('Saving url to wallabag with tags: {}'.format(','.join(tags)))

@@ -80,7 +80,7 @@ def test_get_tags_by_subreddit_pass(mock_get_settings):
 
     sub = 'dominion'
     expected = ['boardgames']
-    actual = rl.get_tags_by_subreddit(sub)
+    actual = rl.get_subreddit_tags(sub)
     assert (expected == actual)
 
 
@@ -97,7 +97,7 @@ def test_get_tags_by_subreddit_fail(mock_get_settings):
 
     sub = '7wonders'
     expected = ['boardgames']
-    actual = rl.get_tags_by_subreddit(sub)
+    actual = rl.get_subreddit_tags(sub)
     assert (expected != actual)
 
 
