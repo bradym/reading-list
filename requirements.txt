@@ -5,4 +5,4 @@ github3.py
 git+git://github.com/reuteras/ttrss-python@updateArticle
 tox
 mock
-wallabag_api
+wallabag-api==1.1.4
