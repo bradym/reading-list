@@ -17,7 +17,28 @@ from praw.models import Submission
 from ttrss.client import TTRClient
 from unidecode import unidecode
 from wallabag_api.wallabag import Wallabag
-import requests_toolbelt
+# import requests_toolbelt
+
+formatter = logging.Formatter('%(asctime)s \t %(levelname)s \t %(message)s', '%Y-%m-%d %H:%M:%S')
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+
+if (logger.hasHandlers()):
+    logger.handlers.clear()
+
+logger.setLevel(logging.INFO)
+logger.addHandler(console_handler)
+
+other_loggers = ['prawcore', 'github3', 'urllib3.connectionpool']
+
+for logger_name in other_loggers:
+
+    current_logger = logging.getLogger(logger_name)
+    current_logger.handlers.clear()
+    current_logger.addHandler(console_handler)
+    current_logger.setLevel(logging.ERROR)
 
 
 class ReadingList(object):
@@ -26,7 +47,6 @@ class ReadingList(object):
     """
 
     def __init__(self):
-        logging.basicConfig(format='%(asctime)s \t %(levelname)s \t %(message)s', level=logging.DEBUG)
 
         self.credentials = {}
 
@@ -47,20 +67,21 @@ class ReadingList(object):
 
     def reddit_login(self):
         if self.reddit is None:
+            logger.debug('Logging into Reddit')
             self.reddit = praw.Reddit(username=self.credentials['reddit']['username'],
                                       password=self.credentials['reddit']['password'],
                                       client_id=self.credentials['reddit']['client_id'],
                                       client_secret=self.credentials['reddit']['client_secret'],
-                                      user_agent=self.credentials['reddit']['user_agent'])
+                                      user_agent='reading-list')
 
     def github_login(self):
         if self.github is None:
             self.github = github3.login(self.credentials['github']['username'], self.credentials['github']['password'])
             try:
                 me = self.github.me()
-                logging.info('Logged into GitHub as {}'.format(me.login))
+                logger.info('Logged into GitHub as {}'.format(me.login))
             except github3.exceptions.AuthenticationFailed as e:
-                logging.error('GitHub login failed: {}'.format(e.message))
+                logger.error('GitHub login failed: {}'.format(e.message))
                 exit(1)
 
     def wallabag_login(self):
@@ -71,8 +92,10 @@ class ReadingList(object):
                 'client_id': self.credentials['wallabag']['client_id'],
                 'client_secret': self.credentials['wallabag']['client_secret'],
             }
-            host = self.credentials['wallabag']['host']
 
+            logger.debug('Logging into wallabag')
+
+            host = self.credentials['wallabag']['host']
             token = Wallabag.get_token(host=host, **params)
 
             self.wallabag = Wallabag(
@@ -87,12 +110,25 @@ class ReadingList(object):
         Get saved posts from reddit and process
         :return:
         """
-        self.reddit_login(self)
+        self.reddit_login()
 
-        for saved in self.reddit.user.me().saved(limit=1000):
-            if isinstance(saved, Submission):
-                if self.save_link(saved.url, saved.title):
-                    saved.unsave()
+
+        logger.info('Getting saved items from reddit')
+
+        after = None
+
+        while True:
+            for saved in self.reddit.user.me().saved(limit=50, params={'after': after}):
+                if isinstance(saved, Submission):
+                    if self.save_link(saved.url, saved.title):
+                        saved.unsave()
+                after = saved.id
+
+            if after is None:
+                logger.info('No more saved reddit items found')
+                break
+
+            logger.info('Getting more reddit posts')
 
     def process_ttrss_stars(self):
         """
@@ -100,6 +136,7 @@ class ReadingList(object):
         :return:
         """
 
+        logger.debug('Getting starred articles from TTRSS')
         for headline in self.ttrss.get_headlines(feed_id=-1, limit=1000):
             if self.save_link(headline.link, headline.title):
                 self.ttrss.update_article(headline.id, 0, 0)
@@ -112,7 +149,7 @@ class ReadingList(object):
         depth = len(path_list)
 
         if parsed_url.netloc != 'github.com' or depth != 3:
-            logging.info('URL is not a github repo.')
+            logger.debug('URL is not a github repo.')
             return False
 
         owner = path_list[1]
@@ -132,18 +169,18 @@ class ReadingList(object):
         """
         self.github_login()
 
-        info = url.path.split('/')
+        info = urlparse(url).path.split('/')
         username = info[1]
         repo = info[2]
 
         if not self.github.is_starred(username, repo):
             if self.github.star(username, repo):
-                logging.info('Repo starred successfully.')
+                logging.info('github repo {} starred successfully.'.format(username + '/' + repo))
         else:
-            logging.info('Repo previously starred.')
+            logging.info('github repo {} previously starred.'.format(username + '/' + repo))
             return True
 
-    def save_link(self, url):
+    def save_link(self, url, title):
         """
         Create bookmark in wallabag or star repo in github
 
@@ -151,33 +188,24 @@ class ReadingList(object):
         :return:
         """
 
+        self.wallabag_login()
+
         # TODO: add to youtube watch later playlist for youtube videos
         # TODO: Add to vimeo Watch Later Queue for vimeo videos
 
-        logging.info('Processing URL: {}'.format(url))
+        logger.debug('Processing URL: {}'.format(url))
 
-        if self.is_github_repo(parsed_url):
-            logging.info('{} is a github repo, attempting to star repo.'.format(url))
-            if self.star_github_repo(parsed_url):
+        if self.is_github_repo(url):
+            logger.debug('{} is a github repo, attempting to star repo.'.format(url))
+            if self.star_github_repo(url):
                 return True
         else:
-            logging.info('Saving {} to wallabag'.format(url))
-
-            if self.wb.post_entries(url=url, title=unidecode(title), tags=tags):
+            if self.wallabag.post_entries(url=url, title=unidecode(title)):
+                logger.info('Saved {} to wallabag'.format(url))
                 return True
 
 
 if __name__ == '__main__':
     rl = ReadingList()
-    rl.get_subreddits()
-    rl.wallabag_login()
-    rl.get_tags()
-
-    pprint(rl.subreddit_tags)
-    pprint(rl.wallabag_tags)
-
-
-# self.ttrss = TTRClient(self.settings['ttrss']['url'],
-#                        self.settings['ttrss']['username'],
-#                        self.settings['ttrss']['password'],
-#                        auto_login=True)
+    rl.process_saved_reddit_posts()
+    # rl.process_ttrss_stars()
