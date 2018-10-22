@@ -11,8 +11,9 @@ from pprint import pprint
 from urllib.parse import urlparse
 
 import github3
-import praw
 import yaml
+
+from praw import Reddit
 from praw.models import Submission
 from ttrss.client import TTRClient
 from unidecode import unidecode
@@ -69,11 +70,11 @@ class ReadingList(object):
     def reddit_login(self):
         if self.reddit is None:
             logger.debug('Logging into Reddit')
-            self.reddit = praw.Reddit(username=self.credentials['reddit']['username'],
-                                      password=self.credentials['reddit']['password'],
-                                      client_id=self.credentials['reddit']['client_id'],
-                                      client_secret=self.credentials['reddit']['client_secret'],
-                                      user_agent='reading-list')
+            self.reddit = Reddit(username=self.credentials['reddit']['username'],
+                                 password=self.credentials['reddit']['password'],
+                                 client_id=self.credentials['reddit']['client_id'],
+                                 client_secret=self.credentials['reddit']['client_secret'],
+                                 user_agent='reading-list')
 
     def github_login(self):
         if self.github is None:
