@@ -26,7 +26,8 @@ console_handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.addHandler(console_handler)
 
-info_loggers = ['']     # This is not a mistake - the root logger is referenced using an empty string.
+# This is not a mistake - the root logger is referenced using an empty string.
+info_loggers = ['']
 error_loggers = ['prawcore', 'github3', 'urllib3.connectionpool']
 
 for logger_name in error_loggers + info_loggers:
@@ -55,6 +56,7 @@ class ReadingList(object):
         self.github = None
         self.reddit = None
         self.wallabag = None
+        self.ttrss = None
 
         self.settings_file_path = os.path.expanduser('~/.config/readinglist/settings.yaml')
         self.load_settings()
@@ -107,6 +109,13 @@ class ReadingList(object):
                 token=token
             )
 
+    def ttrss_login(self):
+        if self.ttrss is None:
+            self.ttrss = TTRClient(self.credentials['ttrss']['host'],
+                                   self.credentials['ttrss']['username'],
+                                   self.credentials['ttrss']['password'],
+                                   auto_login=True)
+
     def process_saved_reddit_posts(self):
         """
         Get saved posts from reddit and process
@@ -138,10 +147,19 @@ class ReadingList(object):
         :return:
         """
 
+        self.ttrss_login()
+
         logger.debug('Getting starred articles from TTRSS')
-        for headline in self.ttrss.get_headlines(feed_id=-1, limit=1000):
-            if self.save_link(headline.link, headline.title):
-                self.ttrss.update_article(headline.id, 0, 0)
+
+        while True:
+            for headline in self.ttrss.get_headlines(feed_id=-1):
+                if headline == None:
+                    break
+
+                if self.save_link(headline.link, headline.title):
+                    self.ttrss.update_article(headline.id, 0, 0)
+
+            logger.info('Getting more articles from TTRSS')
 
     def is_github_repo(self, url):
 
@@ -192,9 +210,6 @@ class ReadingList(object):
 
         self.wallabag_login()
 
-        # TODO: add to youtube watch later playlist for youtube videos
-        # TODO: Add to vimeo Watch Later Queue for vimeo videos
-
         logger.debug('Processing URL: {}'.format(url))
 
         if self.is_github_repo(url):
@@ -210,4 +225,4 @@ class ReadingList(object):
 if __name__ == '__main__':
     rl = ReadingList()
     rl.process_saved_reddit_posts()
-    # rl.process_ttrss_stars()
+    rl.process_ttrss_stars()
