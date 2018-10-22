@@ -7,7 +7,6 @@ Import saved items from reddit and ttrss into wallabag.
 
 import logging
 import os
-from pprint import pprint
 from urllib.parse import urlparse
 
 import github3
@@ -58,29 +57,18 @@ class ReadingList(object):
         self.wallabag = None
         self.ttrss = None
 
-        self.settings_file_path = os.path.expanduser('~/.config/readinglist/settings.yaml')
-        self.load_settings()
-
-    def load_settings(self):
-        """
-        Read the settings file and save to python dict
-        :return:
-        """
-        with open(self.settings_file_path) as f:
-            self.credentials = yaml.safe_load(f)
-
     def reddit_login(self):
         if self.reddit is None:
             logger.debug('Logging into Reddit')
-            self.reddit = Reddit(username=self.credentials['reddit']['username'],
-                                 password=self.credentials['reddit']['password'],
-                                 client_id=self.credentials['reddit']['client_id'],
-                                 client_secret=self.credentials['reddit']['client_secret'],
+            self.reddit = Reddit(username=os.getenv('REDDIT_USERNAME'),
+                                 password=os.getenv('REDDIT_PASSWORD'),
+                                 client_id=os.getenv('REDDIT_CLIENT_ID'),
+                                 client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
                                  user_agent='reading-list')
 
     def github_login(self):
         if self.github is None:
-            self.github = github3.login(self.credentials['github']['username'], self.credentials['github']['password'])
+            self.github = github3.login(token=os.getenv('GITHUB_TOKEN'),)
             try:
                 me = self.github.me()
                 logger.info('Logged into GitHub as {}'.format(me.login))
@@ -91,29 +79,29 @@ class ReadingList(object):
     def wallabag_login(self):
         if self.wallabag is None:
             params = {
-                'username': self.credentials['wallabag']['username'],
-                'password': self.credentials['wallabag']['password'],
-                'client_id': self.credentials['wallabag']['client_id'],
-                'client_secret': self.credentials['wallabag']['client_secret'],
+                'username': os.getenv('WALLABAG_USERNAME'),
+                'password': os.getenv('WALLABAG_PASSWORD'),
+                'client_id': os.getenv('WALLABAG_CLIENT_ID'),
+                'client_secret': os.getenv('WALLABAG_CLIENT_SECRET'),
             }
 
             logger.debug('Logging into wallabag')
 
-            host = self.credentials['wallabag']['host']
+            host = os.getenv('WALLABAG_HOST'),
             token = Wallabag.get_token(host=host, **params)
 
             self.wallabag = Wallabag(
                 host=host,
-                client_secret=params['client_secret'],
-                client_id=params['client_id'],
+                client_secret=os.getenv('WALLABAG_CLIENT_SECRET'),
+                client_id=os.getenv('WALLABAG_CLIENT_ID'),
                 token=token
             )
 
     def ttrss_login(self):
         if self.ttrss is None:
-            self.ttrss = TTRClient(self.credentials['ttrss']['host'],
-                                   self.credentials['ttrss']['username'],
-                                   self.credentials['ttrss']['password'],
+            self.ttrss = TTRClient(os.getenv('TTRSS_HOST'),
+                                   os.getenv('TTRSS_USERNAME'),
+                                   os.getenv('TTRSS_PASSWORD'),
                                    auto_login=True)
 
     def process_saved_reddit_posts(self):
@@ -149,17 +137,19 @@ class ReadingList(object):
 
         self.ttrss_login()
 
-        logger.debug('Getting starred articles from TTRSS')
+        logger.info('Getting starred articles from TTRSS')
 
         while True:
-            for headline in self.ttrss.get_headlines(feed_id=-1):
-                if headline == None:
-                    break
+            headlines = self.ttrss.get_headlines(feed_id=-1)
+            if len(headlines) == 0:
+                logger.info('No more starred articles in TTRSS')
+                break
+            else:
+                for headline in headlines:
+                    if self.save_link(headline.link, headline.title):
+                        self.ttrss.update_article(headline.id, 0, 0)
 
-                if self.save_link(headline.link, headline.title):
-                    self.ttrss.update_article(headline.id, 0, 0)
-
-            logger.info('Getting more articles from TTRSS')
+                logger.info('Getting more articles from TTRSS')
 
     def is_github_repo(self, url):
 
