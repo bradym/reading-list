@@ -17,28 +17,29 @@ from praw.models import Submission
 from ttrss.client import TTRClient
 from unidecode import unidecode
 from wallabag_api.wallabag import Wallabag
-# import requests_toolbelt
 
 formatter = logging.Formatter('%(asctime)s \t %(levelname)s \t %(message)s', '%Y-%m-%d %H:%M:%S')
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 
 logger = logging.getLogger()
-
-if (logger.hasHandlers()):
-    logger.handlers.clear()
-
-logger.setLevel(logging.INFO)
 logger.addHandler(console_handler)
 
-other_loggers = ['prawcore', 'github3', 'urllib3.connectionpool']
+info_loggers = ['']     # This is not a mistake - the root logger is referenced using an empty string.
+error_loggers = ['prawcore', 'github3', 'urllib3.connectionpool']
 
-for logger_name in other_loggers:
-
+for logger_name in error_loggers + info_loggers:
     current_logger = logging.getLogger(logger_name)
-    current_logger.handlers.clear()
+
+    if (current_logger.hasHandlers()):
+        current_logger.handlers.clear()
+
     current_logger.addHandler(console_handler)
-    current_logger.setLevel(logging.ERROR)
+
+    if logger_name in info_loggers:
+        current_logger.setLevel(logging.INFO)
+    else:
+        current_logger.setLevel(logging.ERROR)
 
 
 class ReadingList(object):
