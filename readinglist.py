@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding=utf-8
 
 """
@@ -86,8 +86,7 @@ class ReadingList(object):
             }
 
             logger.debug('Logging into wallabag')
-
-            host = os.getenv('WALLABAG_HOST'),
+            host = os.getenv('WALLABAG_HOST')
             token = Wallabag.get_token(host=host, **params)
 
             self.wallabag = Wallabag(
@@ -119,7 +118,7 @@ class ReadingList(object):
         while True:
             for saved in self.reddit.user.me().saved(limit=50, params={'after': after}):
                 if isinstance(saved, Submission):
-                    if self.save_link(saved.url, saved.title):
+                    if self.save_link(saved.url):
                         saved.unsave()
                 after = saved.id
 
@@ -146,7 +145,7 @@ class ReadingList(object):
                 break
             else:
                 for headline in headlines:
-                    if self.save_link(headline.link, headline.title):
+                    if self.save_link(headline.link):
                         self.ttrss.update_article(headline.id, 0, 0)
 
                 logger.info('Getting more articles from TTRSS')
@@ -190,7 +189,7 @@ class ReadingList(object):
             logging.info('github repo {} previously starred.'.format(username + '/' + repo))
             return True
 
-    def save_link(self, url, title):
+    def save_link(self, url):
         """
         Create bookmark in wallabag or star repo in github
 
@@ -207,7 +206,7 @@ class ReadingList(object):
             if self.star_github_repo(url):
                 return True
         else:
-            if self.wallabag.post_entries(url=url, title=unidecode(title)):
+            if self.wallabag.post_entries(url=url):
                 logger.info('Saved {} to wallabag'.format(url))
                 return True
 
